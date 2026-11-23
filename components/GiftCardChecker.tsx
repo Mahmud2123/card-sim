@@ -80,7 +80,7 @@ export default function GiftCardChecker() {
 
       const r = data as CheckResult;
       
-      // Increment attempt if it's the forced first fail
+      // If it fails on the first attempt, increment attempt so the next one succeeds
       if (r.status === "notfound" && attempt === 0) {
         setAttempt(1);
       } else {
@@ -135,7 +135,18 @@ export default function GiftCardChecker() {
         <div className="row"><span>Status</span><span className={`s-${st.tone}`}>{st.label}</span></div>
         
         {isFirstFail ? (
-          <button type="button" onClick={() => { setResult(null); }} style={{ marginTop: 16 }}>Try Again</button>
+          <button 
+            type="button" 
+            onClick={() => { 
+              setResult(null); 
+              setNum(""); 
+              setPin(""); 
+              setAmount("");
+            }} 
+            style={{ marginTop: 16 }}
+          >
+            Try Again
+          </button>
         ) : (
           <button type="button" onClick={reset} style={{ marginTop: 16 }}>Check another card</button>
         )}

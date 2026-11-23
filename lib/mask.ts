@@ -39,7 +39,8 @@ function classOf(ch: string) {
 export function maskForSecondary(cardNumber: string): string {
   if (!cardNumber || typeof cardNumber !== 'string') return cardNumber;
   const trimmed = cardNumber.trim();
-  if (trimmed.length < 2) return trimmed;
+  // Ensure we have at least 6 characters (1 for start, 1 for masking, 4 for the end)
+  if (trimmed.length < 6) return trimmed;
 
   const chars = [...trimmed];
   const cardClasses = new Set(chars.map(classOf));
@@ -53,11 +54,22 @@ export function maskForSecondary(cardNumber: string): string {
     return rCls === 'digit' || rCls === 'letter';
   }
 
-  const hash = stableHash(trimmed);
-  const seedIndex = hash % chars.length;
+  // Create an array of valid indices to mask. 
+  // Starts at 1 (index 0 is never masked, protecting Apple 'X')
+  // Ends at length - 5 (the last 4 chars are never masked)
+  const validIndices: number[] = [];
+  for (let i = 1; i < trimmed.length - 4; i++) {
+    validIndices.push(i);
+  }
 
-  for (let offset = 0; offset < chars.length; offset++) {
-    const idx = (seedIndex + offset) % chars.length;
+  if (validIndices.length === 0) return trimmed;
+
+  const hash = stableHash(trimmed);
+  const startIdx = hash % validIndices.length;
+
+  // Iterate through the valid indices to find a swappable character
+  for (let offset = 0; offset < validIndices.length; offset++) {
+    const idx = validIndices[(startIdx + offset) % validIndices.length];
     const ch = chars[idx];
     const upper = isLetter(ch) ? ch.toUpperCase() : ch;
 
@@ -73,6 +85,7 @@ export function maskForSecondary(cardNumber: string): string {
       return arr.join('');
     }
 
+    // Fallback if no confusable map applies
     const cls = classOf(ch);
     if (cls === 'digit') {
       const d = ch.charCodeAt(0) - 48;
