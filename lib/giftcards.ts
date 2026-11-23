@@ -18,13 +18,13 @@ export interface Brand {
 }
 
 export const BRANDS: Brand[] = [
-  { id: "apple", name: "Apple", len: 16, type: "alnum", prefix: "X", rule: "16 characters, must start with X (letters and numbers)", placeholder: "X1234ABCD5678EFGH" },
-  { id: "razer", name: "Razer", len: 16, type: "digits", rule: "16 digits" },
-  { id: "xbox", name: "Xbox", len: 25, type: "digits", rule: "25 digits" },
-  { id: "sephora", name: "Sephora", len: 16, type: "digits", pin: 8, rule: "16 digits (plus 8-digit PIN)" },
-  { id: "ebay", name: "eBay", len: 13, type: "digits", rule: "13 digits" },
-  { id: "steam", name: "Steam", len: 15, type: "digits", rule: "15 digits" },
-  { id: "googleplay", name: "Google Play", len: 16, type: "digits", rule: "16 digits" },
+  { id: "apple", name: "Apple Gift Card", len: 16, type: "alnum", prefix: "X", rule: "16 characters, must start with X (letters and numbers)", placeholder: "X1234ABCD5678EFGH" },
+  { id: "razer", name: "Razer Gold Gift Card", len: 16, type: "digits", rule: "16 digits" },
+  { id: "xbox", name: "Xbox Gift Card", len: 25, type: "digits", rule: "25 digits" },
+  { id: "sephora", name: "Sephora Gift Card", len: 16, type: "digits", pin: 8, rule: "16 digits (plus 8-digit PIN)" },
+  { id: "ebay", name: "eBay Gift Card", len: 13, type: "digits", rule: "13 digits" },
+  { id: "steam", name: "Steam Gift Card", len: 15, type: "digits", rule: "15 digits" },
+  { id: "googleplay", name: "Google Play Gift Card", len: 16, type: "digits", rule: "16 digits" },
 ];
 
 export const MIN_AMT = 0.01;

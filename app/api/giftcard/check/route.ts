@@ -18,25 +18,16 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function POST(req: Request) {
   let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-  if (typeof body !== "object" || body === null) {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
-  }
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+  if (typeof body !== "object" || body === null) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
-  // Added 'attempt' from the frontend
   const { brand, number, pin = "", amount, attempt = 0 } = body as Record<string, unknown>;
   if (typeof brand !== "string" || typeof number !== "string" || typeof pin !== "string" || typeof amount !== "string") {
-    return NextResponse.json({ error: "brand, number, pin and amount must be strings." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid fields" }, { status: 400 });
   }
 
   const errors = validateAll(brand, number, pin, amount);
-  if (hasErrors(errors)) {
-    return NextResponse.json({ errors }, { status: 422 });
-  }
+  if (hasErrors(errors)) return NextResponse.json({ errors }, { status: 422 });
 
   const b = getBrand(brand)!;
   const amt = parseFloat(amount);
@@ -44,7 +35,7 @@ export async function POST(req: Request) {
   await sleep(900 + Math.random() * 800);
   let sim = simulate(b, number, b.pin ? pin : "", amt);
 
-  // Force fail on the very first attempt (Attempt 0)
+  // FORCE FIRST ATTEMPT TO FAIL
   if (attempt === 0) {
     sim = { status: "notfound", balance: null, message: "We couldn't find a card matching these details. Check the number and try again." };
   }

