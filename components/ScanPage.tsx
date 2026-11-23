@@ -64,7 +64,6 @@ export default function ScanPage() {
 
     const clean = amount.trim();
     
-    // Create a valid mock number based on the brand to pass validation
     let mockNumber = '1234567890123456';
     if (brand.type === 'alnum') mockNumber = 'X123456789012345';
     else mockNumber = '1'.repeat(brand.len);

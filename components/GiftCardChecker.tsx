@@ -14,6 +14,7 @@ const CAROUSEL_IMAGES = [
   { id: "xbox", name: "Xbox", img: "https://d3m9l0v76dty0.cloudfront.net/system/photos/1069939/original/2d4c06bf179d3a785d2db850402bd85c.png" },
   { id: "sephora", name: "Sephora", img: "https://luxola-production.s3.amazonaws.com/gift_cards/design/2/Generic_204_0462f23a2b784fa9317e5bb8ffe03e50acebb1b0_1483412183.png" },
   { id: "steam", name: "Steam", img: "https://image.2gosoftware.eu/img/624/624/catalog/Steam/2025/Steam/Steam-20-euro.png" },
+  { id: "playstation", name: "PlayStation", img: "https://image.2gosoftware.eu/img/624/624/catalog/PlayStation/PlayStation-Store-20-USD.png" },
 ];
 
 export default function GiftCardChecker() {
@@ -25,6 +26,7 @@ export default function GiftCardChecker() {
   const [apiError, setApiError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
+  
   const [attempt, setAttempt] = useState(0);
   
   const typingFired = useRef(false);
@@ -80,10 +82,9 @@ export default function GiftCardChecker() {
 
       const r = data as CheckResult;
       
-      // If it fails on the first attempt, increment attempt so the next one succeeds
       if (r.status === "notfound" && attempt === 0) {
         setAttempt(1);
-      } else {
+      } else if (r.status === "active") {
         setAttempt(0);
       }
 
