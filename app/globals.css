@@ -42,12 +42,61 @@ button.link{background:none;color:var(--accent);width:auto;margin:0;padding:0;fo
 .s-ok{color:var(--ok)}.s-warn{color:var(--warn)}.s-bad{color:var(--err)}
 .note{margin-top:16px;font-size:11.5px;color:var(--muted);text-align:center}
 
-/* CAROUSEL */
-.carousel-container { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 0 16px; scrollbar-width: none; }
-.carousel-container::-webkit-scrollbar { display: none; }
-.carousel-card { flex: 0 0 180px; height: 100px; border-radius: 12px; scroll-snap-align: start; background-size: cover; background-position: center; position: relative; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-.carousel-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.7), transparent); }
-.carousel-card span { position: absolute; bottom: 8px; left: 12px; color: white; font-size: 13px; font-weight: 700; z-index: 2; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+/* INFINITE MARQUEE */
+.marquee-container {
+  overflow: hidden;
+  padding: 4px 0 16px;
+  width: 100%;
+  position: relative;
+  /* Fade effect on edges */
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+
+.marquee-track {
+  display: flex;
+  gap: 12px;
+  width: max-content;
+  animation: marquee 20s linear infinite;
+}
+
+/* Pause animation on hover */
+.marquee-container:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); } /* Moves exactly halfway (one full set of duplicated cards) */
+}
+
+.carousel-card {
+  width: 180px;
+  height: 100px;
+  border-radius: 12px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+.carousel-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+}
+.carousel-card span {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  z-index: 2;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
 
 /* SCAN BUTTON HOVER */
 a.scan-btn { display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--bg); border: 1px dashed var(--accent); color: var(--accent); padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; margin-bottom: 8px; transition: background 0.2s; }

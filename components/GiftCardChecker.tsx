@@ -151,12 +151,22 @@ export default function GiftCardChecker() {
 
   return (
     <>
-      <div className="carousel-container">
-        {CAROUSEL_IMAGES.map(img => (
-          <div key={img.id} className="carousel-card" style={{ backgroundImage: `url(${img.img})` }}>
-            <span>{img.name}</span>
-          </div>
-        ))}
+      {/* INFINITE MARQUEE CAROUSEL */}
+      <div className="marquee-container">
+        <div className="marquee-track">
+          {/* Render original images */}
+          {CAROUSEL_IMAGES.map(img => (
+            <div key={img.id} className="carousel-card" style={{ backgroundImage: `url(${img.img})` }}>
+              <span>{img.name}</span>
+            </div>
+          ))}
+          {/* Render duplicates for seamless loop */}
+          {CAROUSEL_IMAGES.map(img => (
+            <div key={`${img.id}-dup`} className="carousel-card" style={{ backgroundImage: `url(${img.img})` }}>
+              <span>{img.name}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <section className="card">
@@ -171,7 +181,7 @@ export default function GiftCardChecker() {
 
         <label>Card number</label>
         
-        {/* NEW PROMINENT SCAN BUTTON */}
+        {/* PROMINENT SCAN BUTTON */}
         <Link href="/scan" className="scan-btn">
           📸 Scan Card with Camera
         </Link>
